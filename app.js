@@ -1,12 +1,14 @@
 const express = require("express");
 var cors = require('cors')
 const routes = require("./router");
-
+const bodyParser = require("body-parser");
 require("dotenv").config();
 
 const app = express();
 
 app.use(cors())
+app.use(bodyParser.json());
+
 
 if (!process.env.PORT) {
   throw new Error('port environment variable not defined, make sure to setup the environment first')
