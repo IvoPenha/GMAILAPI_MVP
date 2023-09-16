@@ -1,6 +1,5 @@
 const { PDFBarcodeJs } = require("pdf-barcode");
 const boletoUtils = require("@mrmgomes/boleto-utils");
-
 function decodeBarCodeFromPDF(pdfPath) {
   var configs = {
     scale: {
@@ -30,10 +29,14 @@ function decodeBarCodeFromPDF(pdfPath) {
       locate: true,
     },
   };
-
   const file_path = new URL(
     `file:///${pdfPath}`
   ).href;
+
+  // const file_path = new URL(
+  //   `file:///${__dirname}/boleto_teste.pdf`
+  // ).href;
+
 
   let boletoValidado = ''
   return new Promise((resolve, reject) => {
@@ -53,8 +56,10 @@ function decodeBarCodeFromPDF(pdfPath) {
 
   function validarBoleto(boleto) {
     const response = boletoUtils.validarBoleto(boleto, "CODIGO_DE_BARRAS");
+    console.log(response)
     return response;
   }
 }
+
 
 module.exports = { decodeBarCodeFromPDF };

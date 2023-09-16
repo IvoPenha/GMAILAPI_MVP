@@ -29,18 +29,34 @@ const oAuth2Client = new google.auth.OAuth2({
   clientId: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   redirectUri:  process.env.REDIRECT_URI,
-  eagerRefreshThresholdMillis: '300000'
 }
 );
 
-oAuth2Client.setCredentials({ refresh_token: process.env.REFRESH_TOKEN });
+// async function verificarToken(token) {
+//   try {
+//     // Verifique o token com o cliente OAuth2
+//     const ticket = await oAuth2Client.verifyIdToken({
+//       idToken: token,
+//       audience: process.env.CLIENT_ID, // O cliente ID do seu aplicativo
+//     });
+
+//     const payload = ticket.getPayload();
+//     // Aqui, você pode verificar os detalhes do usuário, como o payload.sub, payload.email, etc.
+//     console.log(payload)
+//     return payload;
+//   } catch (error) {
+//     console.error('Erro ao verificar o token:', error);
+//     throw new Error('Token inválido');
+//   }
+// }
 
 async function login(req, res) {
   try {
     // oAuth2Client.setCredentials({ refresh_token: req.refreshToken });
-    const refreshToken = req.body.refreshToken;
-    const encryptedRefreshToken = encryptToken(refreshToken);
-    res.status(200).json({ message: 'Login bem-sucedido', token: encryptedRefreshToken });
+    // verificarToken(req.body.refreshToken);
+    const accessToken = req.body.accessToken;
+    const encryptedAccessToken = encryptToken(accessToken);
+    res.status(200).json({ message: 'Login bem-sucedido', token: encryptedAccessToken });
   } catch (error) {
     console.error('Erro durante o login:', error);
     res.status(500).json({ message: 'Ocorreu um erro durante o login' });
@@ -117,7 +133,6 @@ async function readLookingForAttachments(email, messageId, attachmentId, token) 
 async function readEachMessageReturningAttachment(email, messageId, token) {
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${email}/messages/${messageId}`;
-    const { token } = await oAuth2Client.getAccessToken();
     const config = generateConfig(url, token);
     const response = await axios(config);
     const SentBy = response.data.payload.headers.find(
@@ -160,12 +175,8 @@ function filterArrayForNullOrEmptyObjects(array) {
 }
 
 async function getAttachmentFromMessages(req, res) {
-  if (!req.headers.token) {
-    return res.status(401).json({ message: 'Token não encontrado no cabeçalho' });
-  }
-  const refreshToken = decryptToken(req.headers.token);
-  // oAuth2Client.setCredentials({ refresh_token: refreshToken })
-  // console.log(await oAuth2Client.getAccessToken())
+  const accessToken = decryptToken(req.headers.authorization);
+  oAuth2Client.setCredentials({ access_token: accessToken })
   const afterTimestamp = new Date(req.query.after).getTime()/1000;
   const beforeTimestamp = new Date(req.query.before).getTime()/1000;
   let query = "?q=";
@@ -181,8 +192,8 @@ async function getAttachmentFromMessages(req, res) {
   query += " has:attachment";
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/messages${query}`;
-    const { token } = await oAuth2Client.getAccessToken();
-    const config = generateConfig(url, token);
+    // const { token } = await oAuth2Client.getAccessToken();
+    const config = generateConfig(url, accessToken);
     const response = await axios(config);
     let data = await response.data;
     const attachments = await Promise.all(
@@ -190,7 +201,7 @@ async function getAttachmentFromMessages(req, res) {
         const attachment = await readEachMessageReturningAttachment(
           req.params.email,
           message.id,
-          token
+          accessToken
         );
         if (attachment.messageId) {
           return attachment;
