@@ -189,7 +189,7 @@ async function getAttachmentFromMessages(req, res) {
     query += ` before:${beforeTimestamp}`;
   }
 
-  query += " has:attachment";
+  query += " has:attachment filename:pdf";
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/messages${query}`;
     // const { token } = await oAuth2Client.getAccessToken();

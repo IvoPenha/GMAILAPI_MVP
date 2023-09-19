@@ -44,6 +44,7 @@ function decodeBarCodeFromPDF(pdfPath) {
       if (result.success) {
         const res = result.codes.toString();
         const boletoValidado = validarBoleto(res);
+        console.log(boletoValidado)
         resolve(boletoValidado); // Resolva a Promise com o resultado
       } else {
         console.error(result.message);
