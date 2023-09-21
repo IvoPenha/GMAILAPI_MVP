@@ -89,9 +89,11 @@ async function sendMail(req, res) {
 
 async function getUser(req, res) {
   try {
-    const url = `https://gmail.googleapis.com/gmail/v1/users/ivoxps@gmail.com/profile`;
-    const { token } = await oAuth2Client.getAccessToken();
-    const config = generateConfig(url, token);
+    const accessToken = decryptToken(req.headers.authorization);
+    oAuth2Client.setCredentials({ access_token: accessToken })
+    console.log(accessToken)
+    const url = `https://gmail.googleapis.com/gmail/v1/users/me/profile`;
+    const config = generateConfig(url, accessToken);
     const response = await axios(config);
     res.json(response.data);
   } catch (error) {
