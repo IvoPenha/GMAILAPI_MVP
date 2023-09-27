@@ -1,36 +1,26 @@
+import { Response, Request } from "express";
 const axios = require("axios");
+// import { admin }  from "../../../app";
 const nodemailer = require("nodemailer");
 const { google } = require("googleapis");
+const CONSTANTS = require("../../infra/constants");
+import {
+  encryptText,
+  decryptText,
+  decodeBarCodeFromPDF,
+  generateConfig,
+  generateAndUseTemporaryPDF,
+} from"../../core";
+import { createAttachment } from './Attachments';
 
-const { generateConfig, generateAndUseTemporaryPDF } = require("./utils");
-const CONSTANTS = require("./constants");
-
-const { decodeBarCodeFromPDF } = require('./boleto');
 require("dotenv").config();
-
-const crypto = require('crypto-js');
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY; // Certifique-se de definir essa variável no seu arquivo .env
-
-function encryptToken(text) {
-  const encryptedText = crypto.AES.encrypt(text, ENCRYPTION_KEY).toString();
-  return encryptedText;
-}
-
-function decryptToken(encryptedText) {
-  const bytes = crypto.AES.decrypt(encryptedText, ENCRYPTION_KEY);
-  const decryptedText = bytes.toString(crypto.enc.Utf8);
-  return decryptedText;
-}
-
 
 
 const oAuth2Client = new google.auth.OAuth2({
   clientId: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
-  redirectUri:  process.env.REDIRECT_URI,
-}
-);
+  redirectUri: process.env.REDIRECT_URI,
+});
 
 // async function verificarToken(token) {
 //   try {
@@ -50,20 +40,31 @@ const oAuth2Client = new google.auth.OAuth2({
 //   }
 // }
 
-async function login(req, res) {
+interface LoginResponse {
+  message: string;
+  token?: string;
+}
+
+async function login(
+  req: { body: { accessToken: string } },
+  res: Response<LoginResponse>
+) {
   try {
     // oAuth2Client.setCredentials({ refresh_token: req.refreshToken });
     // verificarToken(req.body.refreshToken);
     const accessToken = req.body.accessToken;
-    const encryptedAccessToken = encryptToken(accessToken);
-    res.status(200).json({ message: 'Login bem-sucedido', token: encryptedAccessToken });
+    console.log('accessToken', accessToken)
+    const encryptedAccessToken = encryptText(accessToken);
+    res
+      .status(200)
+      .json({ message: "Login bem-sucedido", token: encryptedAccessToken });
   } catch (error) {
-    console.error('Erro durante o login:', error);
-    res.status(500).json({ message: 'Ocorreu um erro durante o login' });
+    console.error("Erro durante o login:", error);
+    res.status(500).json({ message: "Ocorreu um erro durante o login" });
   }
 }
-  
-async function sendMail(req, res) {
+
+async function sendMail(req: Request, res: Response<any>) {
   try {
     const accessToken = await oAuth2Client.getAccessToken();
     const transport = nodemailer.createTransport({
@@ -87,11 +88,14 @@ async function sendMail(req, res) {
   }
 }
 
-async function getUser(req, res) {
+async function getUser(req: Request, res: Response<any>) {
   try {
-    const accessToken = decryptToken(req.headers.authorization);
-    oAuth2Client.setCredentials({ access_token: accessToken })
-    console.log(accessToken)
+    if(req.headers.authorization === undefined) {
+      throw new Error('Token não informado')
+    }
+    const accessToken = decryptText(req.headers.authorization);
+    oAuth2Client.setCredentials({ access_token: accessToken });
+    console.log(accessToken);
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/profile`;
     const config = generateConfig(url, accessToken);
     const response = await axios(config);
@@ -102,29 +106,24 @@ async function getUser(req, res) {
   }
 }
 
-async function getDrafts(req, res) {
-  try {
-    const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/drafts`;
-    const { token } = await oAuth2Client.getAccessToken();
-    const config = generateConfig(url, token);
-    const response = await axios(config);
-    res.json(response.data);
-  } catch (error) {
-    console.log(error);
-    return error;
-  }
-}
-
-async function readLookingForAttachments(email, messageId, attachmentId, token) {
+async function readLookingForAttachments(
+  email: string,
+  messageId: string,
+  attachmentId: string,
+  token: string
+) {
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${email}/messages/${messageId}/attachments/${attachmentId}`;
     const config = generateConfig(url, token);
     const response = await axios(config);
-    const decodedBarcode = await generateAndUseTemporaryPDF(response.data.data, decodeBarCodeFromPDF);
-    if(decodedBarcode){
-      return {...decodedBarcode, base64: response.data.data}
+    const decodedBarcode = await generateAndUseTemporaryPDF(
+      response.data.data,
+      decodeBarCodeFromPDF
+    );
+    if (decodedBarcode) {
+      return { ...decodedBarcode, base64: response.data.data };
     } else {
-      return null
+      return null;
     }
   } catch (error) {
     console.log(error);
@@ -132,22 +131,40 @@ async function readLookingForAttachments(email, messageId, attachmentId, token) 
   }
 }
 
-async function readEachMessageReturningAttachment(email, messageId, token) {
+interface AttachmentReadedFromMessage {
+  SentBy: string;
+  fileName: string;
+  emailDate: string;
+  messageId: string;
+  subject: string;
+  attachment: {
+    barcode: string;
+    dueDate: string;
+    amount: string;
+    base64: string;
+  };
+}
+
+async function readEachMessageReturningAttachment(
+  email: string,
+  messageId: string,
+  token: string
+): Promise<AttachmentReadedFromMessage | any> {
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${email}/messages/${messageId}`;
     const config = generateConfig(url, token);
     const response = await axios(config);
     const SentBy = response.data.payload.headers.find(
-      (header) => header.name === "From"
+      (header: { name: string }) => header.name === "From"
     ).value;
     const emailDate = response.data.payload.headers.find(
-      (header) => header.name === "Date"
+      (header: { name: string }) => header.name === "Date"
     ).value;
     const subject = response.data.payload.headers.find(
-      (header) => header.name === "Subject"
+      (header: { name: string }) => header.name === "Subject"
     ).value;
     if (response.data.payload.parts[1].body.attachmentId) {
-      const attachment = await readLookingForAttachments(
+      const boleto = await readLookingForAttachments(
         email,
         messageId,
         response.data.payload.parts[1].body.attachmentId,
@@ -155,14 +172,13 @@ async function readEachMessageReturningAttachment(email, messageId, token) {
       );
       const fileName = response.data.payload.parts[1].filename;
 
-      
       return {
         SentBy,
         fileName,
         emailDate,
         messageId,
         subject,
-        attachment,
+        boleto,
       };
     }
     return null;
@@ -172,15 +188,29 @@ async function readEachMessageReturningAttachment(email, messageId, token) {
   }
 }
 
-function filterArrayForNullOrEmptyObjects(array) {
+function filterArrayForNullOrEmptyObjects(array: any[]) {
   return array.filter((item) => item !== null && item !== undefined);
 }
 
-async function getAttachmentFromMessages(req, res) {
-  const accessToken = decryptToken(req.headers.authorization);
-  oAuth2Client.setCredentials({ access_token: accessToken })
-  const afterTimestamp = new Date(req.query.after).getTime()/1000;
-  const beforeTimestamp = new Date(req.query.before).getTime()/1000;
+interface RequestWithQuery extends Request {
+  email: any;
+  query: {
+    after: string;
+    before: string;
+  };
+}
+
+async function getAttachmentFromMessages(
+  req: RequestWithQuery,
+  res: Response<any>
+) {
+  if(req.headers.authorization === undefined) {
+    throw new Error('Token não informado')
+  }
+  const accessToken = decryptText(req.headers.authorization);
+  oAuth2Client.setCredentials({ access_token: accessToken });
+  const afterTimestamp = new Date(req.query.after).getTime() / 1000;
+  const beforeTimestamp = new Date(req.query.before).getTime() / 1000;
   let query = "?q=";
 
   if (afterTimestamp) {
@@ -197,7 +227,7 @@ async function getAttachmentFromMessages(req, res) {
     // const { token } = await oAuth2Client.getAccessToken();
     const config = generateConfig(url, accessToken);
     const response = await axios(config);
-    let data = await response.data;
+    let data = (await response.data) as { messages: [{ id: string }] };
     const attachments = await Promise.all(
       data.messages.map(async (message) => {
         const attachment = await readEachMessageReturningAttachment(
@@ -211,36 +241,30 @@ async function getAttachmentFromMessages(req, res) {
       })
     );
 
-    const filteredArray = filterArrayForNullOrEmptyObjects(attachments)
+    const filteredArray = filterArrayForNullOrEmptyObjects(attachments);
+    filteredArray.map(
+      mail => {
+        if(mail.boleto.sucesso){
+          createAttachment({
+            boleto: mail.boleto,
+            emailDate: mail.emailDate,
+            fileName: mail.fileName,
+            messageId: mail.messageId,
+            sentBy: mail.SentBy,
+            subject: mail.subject,
+            profileId: 1
+          })
+        }
+      }
+    )
+  
     res.json(filteredArray);
-    res.json({})
+    res.json({});
   } catch (error) {
     console.log(error);
     return error;
   }
-  res.json({})
+  res.json({});
 }
 
-async function readMail(req, res) {
-  try {
-    const url = `https://gmail.googleapis.com//gmail/v1/users/sid.cd.varma@gmail.com/messages/${req.params.messageId}`;
-    const { token } = await oAuth2Client.getAccessToken();
-    const config = generateConfig(url, token);
-    const response = await axios(config);
-
-    let data = await response.data;
-
-    res.json(data);
-  } catch (error) {
-    res.send(error);
-  }
-}
-
-module.exports = {
-  getUser,
-  sendMail,
-  getDrafts,
-  readMail,
-  getAttachmentFromMessages,
-  login
-};
+export { sendMail, getUser, getAttachmentFromMessages, login };

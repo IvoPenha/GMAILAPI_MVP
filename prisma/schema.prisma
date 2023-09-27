@@ -1,0 +1,44 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id                    Int          @id @default(autoincrement())
+  googleRefreshToken    String?
+  microsoftRefreshToken String?
+  userId                Int?         @unique
+  user                  User?        @relation(fields: [userId], references: [id])
+  attachments           Attachment[]
+}
+
+model User {
+  id      Int      @id @default(autoincrement())
+  email   String   @unique
+  nome    String?
+  senha   String
+  profile Profile?
+}
+
+model Attachment {
+  id        Int      @id @default(autoincrement())
+  sentBy    String
+  fileName  String
+  emailDate DateTime // Use um tipo de data adequado
+  messageId String
+  subject   String
+  barcode   String
+  dueDate   DateTime // Use um tipo de data adequado
+  amount    Float? // Use um tipo numérico adequado para valores monetários
+  base64    String
+  profile   Profile  @relation(fields: [profileId], references: [id])
+  profileId Int
+}
+

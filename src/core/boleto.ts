@@ -1,6 +1,19 @@
 const { PDFBarcodeJs } = require("pdf-barcode");
 const boletoUtils = require("@mrmgomes/boleto-utils");
-function decodeBarCodeFromPDF(pdfPath) {
+
+type Attachment = {
+  sucesso: boolean;
+  codigoInput: string;
+  mensagem: string;
+  tipoCodigoInput: string;
+  tipoBoleto: string;
+  codigoBarras: string;
+  linhaDigitavel: string;
+  vencimento: string;
+  valor: number;
+  base64: string;
+};
+export function decodeBarCodeFromPDF(pdfPath : string) : Promise<Attachment> {
   var configs = {
     scale: {
       once: true,
@@ -29,6 +42,7 @@ function decodeBarCodeFromPDF(pdfPath) {
       locate: true,
     },
   };
+
   const file_path = new URL(
     `file:///${pdfPath}`
   ).href;
@@ -37,17 +51,13 @@ function decodeBarCodeFromPDF(pdfPath) {
   //   `file:///${__dirname}/boleto_teste.pdf`
   // ).href;
 
-
-  let boletoValidado = ''
   return new Promise((resolve, reject) => {
-    var callback = function (result) {
+    var callback = function (result : any) {
       if (result.success) {
         const res = result.codes.toString();
         const boletoValidado = validarBoleto(res);
-        console.log(boletoValidado)
         resolve(boletoValidado); // Resolva a Promise com o resultado
       } else {
-        console.error(result.message);
         reject(result.message); // Rejeite a Promise com uma mensagem de erro
       }
     };
@@ -55,12 +65,9 @@ function decodeBarCodeFromPDF(pdfPath) {
     PDFBarcodeJs.decodeSinglePage(file_path, 1, configs, callback);
   });
 
-  function validarBoleto(boleto) {
+  function validarBoleto(boleto : string) {
     const response = boletoUtils.validarBoleto(boleto, "CODIGO_DE_BARRAS");
-    console.log(response)
     return response;
   }
 }
 
-
-module.exports = { decodeBarCodeFromPDF };
