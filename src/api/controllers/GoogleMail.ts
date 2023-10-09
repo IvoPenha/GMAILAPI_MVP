@@ -271,6 +271,7 @@ async function getAttachmentFromMessages(
         const addedToCacheMessages = await prisma.googleReadMessages.create({
           data: {
             messageId: message.id,
+            usuarioId: +payload.id,
           },
         });
         console.log(

@@ -30,6 +30,7 @@ model Usuario {
 
 model googleReadMessages {
   id        Int    @id @default(autoincrement())
+  usuarioId Int
   messageId String @unique
 }
 
