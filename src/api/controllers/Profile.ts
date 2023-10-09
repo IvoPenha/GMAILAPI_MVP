@@ -75,3 +75,45 @@ export async function getProfileByUser(
     });
   }
 }
+
+export async function updateProfile(
+  req: BaseRequest<ProfileRequest, {usuarioId: number}>,
+  res: Response
+) {
+  try {
+    const { usuarioId } = req.params;
+    const { googleRefreshToken, microsoftRefreshToken } = req.body;
+
+    if (!usuarioId || isNaN(+usuarioId)) {
+      return res
+        .status(400)
+        .json({ message: "ID de usuário inválido", response: {} });
+    }
+
+    const profile = await prisma.perfil.update({
+      where: {
+        usuarioId: +usuarioId,
+      },
+      data: {
+        googleRefreshToken,
+        microsoftRefreshToken,
+      },
+    });
+
+    res.status(200).json({
+      message: "Perfil atualizado",
+      response: {
+        id: profile.id,
+        googleRefreshToken: profile.googleRefreshToken,
+        microsoftRefreshToken: profile.microsoftRefreshToken,
+        usuarioId,
+      },
+    });
+  } catch (error: any) {
+    console.error("Erro durante a atualização:", error);
+    res.status(500).json({
+      message: "Ocorreu um erro durante a atualização",
+      response: { error: error.message },
+    });
+  }
+}
