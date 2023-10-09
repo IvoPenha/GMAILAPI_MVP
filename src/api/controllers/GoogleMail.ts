@@ -18,7 +18,7 @@ import {
   BaseRequestQuery,
   BaseResponse,
 } from "../../domain/types";
-import { Anexo, PrismaClient } from "@prisma/client";
+import {  PrismaClient  } from "@prisma/client";
 import { getInstitutionalMailName } from "../../core/email";
 import { refreshToken } from "firebase-admin/app";
 import admin from "../../../app";
