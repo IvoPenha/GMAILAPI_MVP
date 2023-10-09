@@ -34,7 +34,7 @@ router.get(
   "/attachmentByProfile/:profileId",
   controllers.getAttachmentsByProfile
 );
-router.put("/profile/:userId", controllers.updateProfile);
+router.put("/profile/:usuarioId", controllers.updateProfile);
 //#endregion
 
 export default router;
