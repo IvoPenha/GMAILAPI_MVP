@@ -1,10 +1,10 @@
-import { Attachment, User } from "@prisma/client";
+import { Usuario, Perfil, Anexo } from "@prisma/client";
 
 export interface Profile {
   id: number;
   googleRefreshToken: string;
   microsoftRefreshToken: string;
   userId: number;
-  user: User;
-  attachments: Attachment[];
+  user: Usuario;
+  attachments: Anexo[];
 }
