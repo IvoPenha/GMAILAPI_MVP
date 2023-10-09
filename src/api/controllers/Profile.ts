@@ -77,17 +77,19 @@ export async function getProfileByUser(
 }
 
 export async function updateProfile(
-  req: BaseRequest<ProfileRequest, {usuarioId: number}>,
+  req: BaseRequest<ProfileRequest, {usuarioId: string}>,
   res: Response
 ) {
   try {
     const { usuarioId } = req.params;
     const { googleRefreshToken, microsoftRefreshToken } = req.body;
 
-    if (!usuarioId || isNaN(+usuarioId)) {
+    if (!usuarioId) {
       return res
         .status(400)
-        .json({ message: "ID de usuário inválido", response: {} });
+        .json({ message: "ID de usuário inválido", response: {
+          error: "Você tentou passar um ID de usuário inválido" + usuarioId
+        } });
     }
 
     const profile = await prisma.perfil.update({
