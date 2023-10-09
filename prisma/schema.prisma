@@ -10,35 +10,40 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Profile {
-  id                    Int          @id @default(autoincrement())
+model Perfil {
+  id                    Int     @id @default(autoincrement())
   googleRefreshToken    String?
   microsoftRefreshToken String?
-  userId                Int?         @unique
-  user                  User?        @relation(fields: [userId], references: [id])
-  attachments           Attachment[]
+  usuarioId             Int     @unique
+  usuario               Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  Anexos                Anexo[]
 }
 
-model User {
-  id      Int      @id @default(autoincrement())
-  email   String   @unique
-  nome    String?
-  senha   String
-  profile Profile?
+model Usuario {
+  id       Int     @id @default(autoincrement())
+  email    String  @unique
+  nome     String?
+  senha    String
+  perfilId Int?
+  Perfil   Perfil?
 }
 
-model Attachment {
-  id        Int      @id @default(autoincrement())
-  sentBy    String
-  fileName  String
-  emailDate DateTime // Use um tipo de data adequado
-  messageId String
-  subject   String
-  barcode   String
-  dueDate   DateTime // Use um tipo de data adequado
-  amount    Float? // Use um tipo numérico adequado para valores monetários
-  base64    String
-  profile   Profile  @relation(fields: [profileId], references: [id])
-  profileId Int
+model googleReadMessages {
+  id        Int    @id @default(autoincrement())
+  messageId String @unique
 }
 
+model Anexo {
+  id             Int      @id @default(autoincrement())
+  enviadoPor     String
+  nomeArquivo    String
+  dataEmail      DateTime
+  mensagemId     String
+  assunto        String
+  codigoBarras   String
+  dataVencimento DateTime
+  valor          Float?
+  base64         String
+  perfil         Perfil   @relation(fields: [perfilId], references: [id])
+  perfilId       Int
+}

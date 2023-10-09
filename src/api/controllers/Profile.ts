@@ -1,32 +1,30 @@
-import { Attachment, PrismaClient, Profile } from "@prisma/client";
+import { PrismaClient, Anexo, Perfil } from "@prisma/client";
 import { Response } from "express";
+import { BaseRequest, BaseResponse } from "../../domain/types";
 
 const prisma = new PrismaClient();
 
 interface ProfileRequest {
   googleRefreshToken?: string;
   microsoftRefreshToken?: string;
-  userId: number;
+  usuarioId: number;
 }
 
 interface ProfileResponse {
-  message: string;
-  response: {
-    id?: number;
-    googleRefreshToken?: string | null;
-    microsoftRefreshToken?: string | null;
-    userId?: number | null;
-    error?: any;
-    Attachments?: Attachment[];
-  };
+  id?: number;
+  googleRefreshToken?: string | null;
+  microsoftRefreshToken?: string | null;
+  usuarioId?: number | null;
+  error?: any;
+  anexos: Anexo[];
 }
 
-export async function createProfile(req: { body: ProfileRequest }) {
+export async function createProfile(req: ProfileRequest) {
   try {
-    const { userId } = req.body;
-    const profile = await prisma.profile.create({
+    const { usuarioId } = req;
+    const profile = await prisma.perfil.create({
       data: {
-        userId,
+        usuarioId,
       },
     });
     return profile;
@@ -36,21 +34,21 @@ export async function createProfile(req: { body: ProfileRequest }) {
 }
 
 export async function getProfileByUser(
-  req: { params: { userId: number } },
-  res: Response<ProfileResponse>
+  req: BaseRequest<ProfileRequest>,
+  res: Response
 ) {
   try {
-    const { userId } = req.params;
+    const { usuarioId } = req.params;
 
-    if (!userId || isNaN(userId)) {
+    if (!usuarioId || isNaN(+usuarioId)) {
       return res
         .status(400)
         .json({ message: "ID de usuário inválido", response: {} });
     }
 
-    const profile = await prisma.profile.findFirst({
+    const profile = await prisma.perfil.findFirst({
       where: {
-        userId: +userId,
+        usuarioId: +usuarioId,
       },
     });
 
@@ -60,24 +58,20 @@ export async function getProfileByUser(
         .json({ message: "Perfil não encontrado", response: {} });
     }
 
-    res
-      .status(200)
-      .json({
-        message: "Perfil encontrado",
-        response: {
-          id: profile.id,
-          googleRefreshToken: profile.googleRefreshToken,
-          microsoftRefreshToken: profile.microsoftRefreshToken,
-          userId,
-        },
-      });
+    res.status(200).json({
+      message: "Perfil encontrado",
+      response: {
+        id: profile.id,
+        googleRefreshToken: profile.googleRefreshToken,
+        microsoftRefreshToken: profile.microsoftRefreshToken,
+        usuarioId,
+      },
+    });
   } catch (error: any) {
     console.error("Erro durante a busca:", error);
-    res
-      .status(500)
-      .json({
-        message: "Ocorreu um erro durante a busca",
-        response: { error: error.message },
-      });
+    res.status(500).json({
+      message: "Ocorreu um erro durante a busca",
+      response: { error: error.message },
+    });
   }
 }

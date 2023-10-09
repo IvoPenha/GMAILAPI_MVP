@@ -1,6 +1,6 @@
-import { Attachment } from '@prisma/client';
+import { Attachment, User } from "@prisma/client";
 
-interface Profile {
+export interface Profile {
   id: number;
   googleRefreshToken: string;
   microsoftRefreshToken: string;

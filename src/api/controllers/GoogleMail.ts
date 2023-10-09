@@ -1,8 +1,9 @@
+import { Boleto } from "./../../domain/types/anexos/boleto";
 import { Response, Request } from "express";
-const axios = require("axios");
+import { google } from "googleapis";
+import axios from "axios";
 // import { admin }  from "../../../app";
 const nodemailer = require("nodemailer");
-const { google } = require("googleapis");
 const CONSTANTS = require("../../infra/constants");
 import {
   encryptText,
@@ -10,17 +11,27 @@ import {
   decodeBarCodeFromPDF,
   generateConfig,
   generateAndUseTemporaryPDF,
-} from"../../core";
-import { createAttachment } from './Attachments';
-
+} from "../../core";
+import { createAnexo } from "./Attachments";
+import {
+  BaseRequest,
+  BaseRequestQuery,
+  BaseResponse,
+} from "../../domain/types";
+import { Anexo, PrismaClient } from "@prisma/client";
+import { getInstitutionalMailName } from "../../core/email";
+import { refreshToken } from "firebase-admin/app";
+import admin from "../../../app";
+import jwt from "jsonwebtoken";
 require("dotenv").config();
-
 
 const oAuth2Client = new google.auth.OAuth2({
   clientId: process.env.CLIENT_ID,
   clientSecret: process.env.CLIENT_SECRET,
   redirectUri: process.env.REDIRECT_URI,
 });
+
+const prisma = new PrismaClient();
 
 // async function verificarToken(token) {
 //   try {
@@ -45,33 +56,29 @@ interface LoginResponse {
   token?: string;
 }
 
-async function login(
-  req: { body: { accessToken: string } },
-  res: Response<LoginResponse>
+async function handleAuthorizationCode(
+  req: BaseRequest<{ authorizationCode: string }, {}>,
+  res: Response
 ) {
   try {
-    // oAuth2Client.setCredentials({ refresh_token: req.refreshToken });
-    // verificarToken(req.body.refreshToken);
-    const accessToken = req.body.accessToken;
-    console.log('accessToken', accessToken)
-    const encryptedAccessToken = encryptText(accessToken);
-    res
-      .status(200)
-      .json({ message: "Login bem-sucedido", token: encryptedAccessToken });
+    const { authorizationCode } = req.body;
+    console.log(authorizationCode);
+    const response = await oAuth2Client.getToken(authorizationCode);
+    console.log(response);
+    res.json({ token: response });
   } catch (error) {
-    console.error("Erro durante o login:", error);
-    res.status(500).json({ message: "Ocorreu um erro durante o login" });
+    console.log(error);
+    res.json({ message: "error" });
   }
 }
 
-async function sendMail(req: Request, res: Response<any>) {
+async function sendMail(req: Request, res: Response) {
   try {
-    const accessToken = await oAuth2Client.getAccessToken();
     const transport = nodemailer.createTransport({
       service: "gmail",
       auth: {
         ...CONSTANTS.auth,
-        accessToken: accessToken,
+        // accessToken: accessToken,
       },
     });
 
@@ -88,18 +95,18 @@ async function sendMail(req: Request, res: Response<any>) {
   }
 }
 
-async function getUser(req: Request, res: Response<any>) {
+async function getUser(req: Request, res: Response) {
   try {
-    if(req.headers.authorization === undefined) {
-      throw new Error('Token não informado')
-    }
-    const accessToken = decryptText(req.headers.authorization);
-    oAuth2Client.setCredentials({ access_token: accessToken });
-    console.log(accessToken);
+    // await oAuth2Client.setCredentials({
+    //   refreshToken: process.env.REFRESH_TOKEN,
+    // });
+    console.log(process.env.REFRESH_TOKEN);
+    const { token } = await oAuth2Client.getAccessToken();
+    console.log(token);
     const url = `https://gmail.googleapis.com/gmail/v1/users/me/profile`;
-    const config = generateConfig(url, accessToken);
-    const response = await axios(config);
-    res.json(response.data);
+    // const config = generateConfig(url, token);
+    // const response = await axios(config);
+    // res.json(response.data);
   } catch (error) {
     console.log(error);
     res.send(error);
@@ -111,7 +118,7 @@ async function readLookingForAttachments(
   messageId: string,
   attachmentId: string,
   token: string
-) {
+): Promise<(Boleto & { base64: string }) | null> {
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${email}/messages/${messageId}/attachments/${attachmentId}`;
     const config = generateConfig(url, token);
@@ -127,29 +134,24 @@ async function readLookingForAttachments(
     }
   } catch (error) {
     console.log(error);
-    return error;
+    return null;
   }
 }
 
 interface AttachmentReadedFromMessage {
-  SentBy: string;
-  fileName: string;
-  emailDate: string;
-  messageId: string;
-  subject: string;
-  attachment: {
-    barcode: string;
-    dueDate: string;
-    amount: string;
-    base64: string;
-  };
+  enviadoPor: string;
+  nomeArquivo: string;
+  dataEmail: string;
+  mensagemId: string;
+  assunto: string;
+  boleto: Boleto & { base64: string };
 }
 
 async function readEachMessageReturningAttachment(
   email: string,
   messageId: string,
   token: string
-): Promise<AttachmentReadedFromMessage | any> {
+): Promise<AttachmentReadedFromMessage | null> {
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${email}/messages/${messageId}`;
     const config = generateConfig(url, token);
@@ -171,24 +173,24 @@ async function readEachMessageReturningAttachment(
         token
       );
       const fileName = response.data.payload.parts[1].filename;
-
-      return {
-        SentBy,
-        fileName,
-        emailDate,
-        messageId,
-        subject,
-        boleto,
-      };
+      if (boleto)
+        return {
+          enviadoPor: SentBy,
+          nomeArquivo: fileName,
+          dataEmail: emailDate,
+          mensagemId: messageId,
+          assunto: subject,
+          boleto,
+        };
     }
     return null;
   } catch (error) {
     console.log(error);
-    return error;
+    return null;
   }
 }
 
-function filterArrayForNullOrEmptyObjects(array: any[]) {
+function filterArrayForNullOrEmptyObjects<T>(array: T[]): T[] {
   return array.filter((item) => item !== null && item !== undefined);
 }
 
@@ -201,14 +203,34 @@ interface RequestWithQuery extends Request {
 }
 
 async function getAttachmentFromMessages(
-  req: RequestWithQuery,
-  res: Response<any>
+  req: BaseRequest<{ refreshToken: string }, { after: string; before: string }>,
+  res: Response
 ) {
-  if(req.headers.authorization === undefined) {
-    throw new Error('Token não informado')
-  }
-  const accessToken = decryptText(req.headers.authorization);
-  oAuth2Client.setCredentials({ access_token: accessToken });
+  const BearerToken = req.headers.authorization?.split(" ")[1];
+  console.log(req.headers.authorization?.split(" "));
+
+  console.log(BearerToken);
+  if (BearerToken == undefined)
+    return res.json({ message: "faltou o bearerToken" });
+  const decodedToken = jwt.decode(BearerToken, { json: true, complete: true });
+  const payload = decodedToken?.payload as { id: number } | undefined;
+  console.log("decodedToken>", payload);
+  if (!payload)
+    return res.json({
+      message: "Não foi possivel decodar o token",
+    });
+  const perfil = await prisma.perfil.findFirst({
+    where: {
+      usuarioId: +payload.id,
+    },
+  });
+
+  if (!perfil || perfil.googleRefreshToken == null || undefined)
+    res.json({
+      message: "nada de token",
+    });
+
+  oAuth2Client.setCredentials({ refresh_token: perfil?.googleRefreshToken });
   const afterTimestamp = new Date(req.query.after).getTime() / 1000;
   const beforeTimestamp = new Date(req.query.before).getTime() / 1000;
   let query = "?q=";
@@ -224,47 +246,73 @@ async function getAttachmentFromMessages(
   query += " has:attachment filename:pdf";
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/messages${query}`;
-    // const { token } = await oAuth2Client.getAccessToken();
-    const config = generateConfig(url, accessToken);
+    const { token } = await oAuth2Client.getAccessToken();
+    if (!token)
+      return res.json({ message: "Não foi encontrado token no oAuthCLient" });
+    const config = generateConfig(url, token!);
     const response = await axios(config);
     let data = (await response.data) as { messages: [{ id: string }] };
     const attachments = await Promise.all(
       data.messages.map(async (message) => {
+        const hasBeenRead = await prisma.googleReadMessages.findFirst({
+          where: {
+            messageId: message.id,
+          },
+        });
+        if (hasBeenRead) {
+          return null;
+        }
+
         const attachment = await readEachMessageReturningAttachment(
           req.params.email,
           message.id,
-          accessToken
+          token
         );
-        if (attachment.messageId) {
+        const addedToCacheMessages = await prisma.googleReadMessages.create({
+          data: {
+            messageId: message.id,
+          },
+        });
+        console.log(
+          "adicionei ao cache de mensagens lidas:",
+          addedToCacheMessages
+        );
+        if (attachment) {
           return attachment;
         }
       })
     );
 
-    const filteredArray = filterArrayForNullOrEmptyObjects(attachments);
-    filteredArray.map(
-      mail => {
-        if(mail.boleto.sucesso){
-          createAttachment({
-            boleto: mail.boleto,
-            emailDate: mail.emailDate,
-            fileName: mail.fileName,
-            messageId: mail.messageId,
-            sentBy: mail.SentBy,
-            subject: mail.subject,
-            profileId: 1
-          })
-        }
-      }
-    )
-  
-    res.json(filteredArray);
-    res.json({});
+    const filteredArray = filterArrayForNullOrEmptyObjects(
+      attachments
+    ) as AttachmentReadedFromMessage[];
+
+    filteredArray.map((mail) => {
+      const remetente = getInstitutionalMailName(mail.enviadoPor);
+      if (mail.boleto.sucesso)
+        return createAnexo({
+          base64: mail.boleto.base64,
+          codigoBarras: mail.boleto.linhaDigitavel,
+          dataEmail: new Date(mail.dataEmail),
+          dataVencimento: new Date(mail.boleto.vencimento),
+          assunto: mail.assunto,
+          mensagemId: mail.mensagemId,
+          nomeArquivo: mail.nomeArquivo,
+          valor: mail.boleto.valor,
+          enviadoPor: remetente,
+          perfilId: 1,
+        });
+    });
+    return res.json(filteredArray);
   } catch (error) {
     console.log(error);
     return error;
   }
-  res.json({});
 }
 
-export { sendMail, getUser, getAttachmentFromMessages, login };
+export {
+  sendMail,
+  getUser,
+  getAttachmentFromMessages,
+  handleAuthorizationCode,
+};
