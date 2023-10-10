@@ -62,9 +62,9 @@ async function handleAuthorizationCode(
 ) {
   try {
     const { authorizationCode } = req.body;
-    console.log(authorizationCode);
+    // console.log(authorizationCode);
     const response = await oAuth2Client.getToken(authorizationCode);
-    console.log(response);
+    // console.log(response);
     res.json({ token: response });
   } catch (error) {
     console.log(error);
@@ -207,14 +207,11 @@ async function getAttachmentFromMessages(
   res: Response
 ) {
   const BearerToken = req.headers.authorization?.split(" ")[1];
-  console.log(req.headers.authorization?.split(" "));
 
-  console.log(BearerToken);
   if (BearerToken == undefined)
     return res.json({ message: "faltou o bearerToken" });
   const decodedToken = jwt.decode(BearerToken, { json: true, complete: true });
   const payload = decodedToken?.payload as { id: number } | undefined;
-  console.log("decodedToken>", payload);
   if (!payload)
     return res.json({
       message: "Não foi possivel decodar o token",
@@ -288,23 +285,38 @@ async function getAttachmentFromMessages(
       attachments
     ) as AttachmentReadedFromMessage[];
 
-    filteredArray.map((mail) => {
+    const createdBoletos = filteredArray.map(async (mail) => {
       const remetente = getInstitutionalMailName(mail.enviadoPor);
-      if (mail.boleto.sucesso)
-        return createAnexo({
-          base64: mail.boleto.base64,
-          codigoBarras: mail.boleto.linhaDigitavel,
-          dataEmail: new Date(mail.dataEmail),
-          dataVencimento: new Date(mail.boleto.vencimento),
-          assunto: mail.assunto,
-          mensagemId: mail.mensagemId,
-          nomeArquivo: mail.nomeArquivo,
-          valor: mail.boleto.valor,
-          enviadoPor: remetente,
-          perfilId: 1,
-        });
+      const boletoToApi = {
+        base64: mail.boleto.base64,
+        codigoBarras: mail.boleto.linhaDigitavel,
+        dataEmail: new Date(mail.dataEmail),
+        dataVencimento: new Date(mail.boleto.vencimento),
+        assunto: mail.assunto,
+        mensagemId: mail.mensagemId,
+        nomeArquivo: mail.nomeArquivo,
+        valor: mail.boleto.valor,
+        enviadoPor: remetente,
+        perfilId: 1,
+      }
+      if (mail.boleto.sucesso){
+        const anexo = await createAnexo(boletoToApi);
+        console.log(anexo)
+        if(anexo){
+          console.log("Anexo criado com sucesso")
+          const { base64, ...boletoDTO } = anexo;
+          return boletoDTO;
+        } 
+        return null;
+      }
     });
-    return res.json(filteredArray);
+    const filteredBoletos = filterArrayForNullOrEmptyObjects(
+      await Promise.all(createdBoletos)
+    );
+    return res.json({
+      message: filteredBoletos.length + ' boletos encontrados',
+      response: filteredBoletos,
+    });
   } catch (error) {
     console.log(error);
     return error;

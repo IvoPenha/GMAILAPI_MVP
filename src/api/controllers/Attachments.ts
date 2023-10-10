@@ -35,19 +35,8 @@ export async function getAttachmentByMessageID(mensagemId: string) {
 
 export async function createAnexo(req: Omit<Anexo, "id">) {
   try {
-    const {
-      assunto,
-      codigoBarras,
-      dataEmail,
-      dataVencimento,
-      mensagemId,
-      nomeArquivo,
-      valor,
-      enviadoPor,
-      perfilId,
-      base64,
-    } = req;
-
+    const { perfilId, mensagemId } = req;
+    console.log('entrei em createAnexo, req:', req)
     if (perfilId === undefined || isNaN(+perfilId))
       throw new Error("ID de usuário inválido");
 
@@ -59,19 +48,16 @@ export async function createAnexo(req: Omit<Anexo, "id">) {
 
     if (!profile) throw new Error("Usuário não encontrado");
 
-    const hasAlreadyAttachment = await prisma.googleReadMessages.findFirst({
-      where: {
-        messageId: mensagemId,
-      },
-    });
-
-    if (hasAlreadyAttachment) return null;
+    console.log('cheguei até aqui')
 
     const attachment = await prisma.anexo.create({
       data: {
         ...req,
       },
     });
+
+    console.log('passei no prisma',attachment)
+
     return attachment;
   } catch (error: any) {
     console.error(error);

@@ -28,7 +28,7 @@ export async function generateAndUseTemporaryPDF(
   fs.writeFileSync(tempPdfFilePath, pdfBuffer);
 
   // Now you can use the temporary PDF file as needed within this function
-  console.log("Temporary PDF file created:", tempPdfFilePath);
+  // console.log("Temporary PDF file created:", tempPdfFilePath);
   const callbackedFunctionResult = await decodeBarCodeFromPDF(tempPdfFilePath);
   // console.log(callbackedFunctionResult)
   return callbackedFunctionResult;
