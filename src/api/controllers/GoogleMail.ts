@@ -18,7 +18,7 @@ import {
   BaseRequestQuery,
   BaseResponse,
 } from "../../domain/types";
-import {  PrismaClient  } from "@prisma/client";
+import { PrismaClient, Situacao } from "@prisma/client";
 import { getInstitutionalMailName } from "../../core/email";
 import { refreshToken } from "firebase-admin/app";
 import admin from "../../../app";
@@ -213,7 +213,7 @@ async function getAttachmentFromMessages(
   const decodedToken = jwt.decode(BearerToken, { json: true, complete: true });
   const payload = decodedToken?.payload as { id: number } | undefined;
   if (!payload)
-    return res.json({
+    return res.status(401).json({
       message: "Não foi possivel decodar o token",
     });
   const perfil = await prisma.perfil.findFirst({
@@ -224,9 +224,10 @@ async function getAttachmentFromMessages(
 
   if (!perfil || perfil.googleRefreshToken == null || undefined)
     res.json({
-      message: "nada de token",
+      message: "Perfil sem refresh token da google.",
     });
 
+  console.log("refresh token do perfil:", perfil?.googleRefreshToken);
   oAuth2Client.setCredentials({ refresh_token: perfil?.googleRefreshToken });
   const afterTimestamp = new Date(req.query.after).getTime() / 1000;
   const beforeTimestamp = new Date(req.query.before).getTime() / 1000;
@@ -240,7 +241,7 @@ async function getAttachmentFromMessages(
     query += ` before:${beforeTimestamp}`;
   }
 
-  query += " has:attachment filename:pdf";
+  query += " has:attachment filename:pdf NOT from:me";
   try {
     const url = `https://gmail.googleapis.com/gmail/v1/users/${req.params.email}/messages${query}`;
     const { token } = await oAuth2Client.getAccessToken();
@@ -298,15 +299,16 @@ async function getAttachmentFromMessages(
         valor: mail.boleto.valor,
         enviadoPor: remetente,
         perfilId: 1,
+        Situacao: new Date(mail.boleto.vencimento).getTime() < new Date().getTime() ? Situacao.VENCIDO : Situacao.PENDENTE
       }
-      if (mail.boleto.sucesso){
+      if (mail.boleto.sucesso) {
         const anexo = await createAnexo(boletoToApi);
         console.log(anexo)
-        if(anexo){
+        if (anexo) {
           console.log("Anexo criado com sucesso")
           const { base64, ...boletoDTO } = anexo;
           return boletoDTO;
-        } 
+        }
         return null;
       }
     });
@@ -317,9 +319,8 @@ async function getAttachmentFromMessages(
       message: filteredBoletos.length + ' boletos encontrados',
       response: filteredBoletos,
     });
-  } catch (error) {
-    console.log(error);
-    return error;
+  } catch (error: any) {
+    return res.json({ error: error.message });
   }
 }
 

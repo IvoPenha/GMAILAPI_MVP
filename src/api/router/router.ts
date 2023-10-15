@@ -26,6 +26,11 @@ router.get(
   verificarToken,
   controllers.readBoletosByProfileId
 );
+router.patch(
+  "/boletos-situacao/:id",
+  verificarToken,
+  controllers.patchBoletoSituacao
+);
 //#endregion
 
 //#region Profile
