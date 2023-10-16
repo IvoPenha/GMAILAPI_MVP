@@ -1,5 +1,5 @@
 
-import { PrismaClient, Situacao } from '@prisma/client';
+import { PrismaClient, Situacao, } from '@prisma/client';
 import { Request, Response } from "express";
 
 const prisma = new PrismaClient();
@@ -31,7 +31,7 @@ export const readBoletosByProfileId = async (req: Request, res: Response) => {
 
   try {
     const boletos = await prisma.anexo.findMany({
-      where: filtros,
+      where: filtros as any,
       orderBy: {
         dataVencimento: 'asc'
       }
@@ -56,7 +56,7 @@ export const patchBoletoSituacao = async (req: Request, res: Response) => {
         id: +id
       },
       data: {
-        Situacao: situacao
+        situacao: situacao
       }
     });
     return res.status(200).json({ message: 'sucesso ao alterar a situação', response: boleto });
