@@ -299,7 +299,7 @@ async function getAttachmentFromMessages(
         valor: mail.boleto.valor,
         enviadoPor: remetente,
         perfilId: 1,
-        Situacao: new Date(mail.boleto.vencimento).getTime() < new Date().getTime() ? Situacao.VENCIDO : Situacao.PENDENTE
+        situacao: new Date(mail.boleto.vencimento).getTime() < new Date().getTime() ? Situacao.VENCIDO : Situacao.PENDENTE
       }
       if (mail.boleto.sucesso) {
         const anexo = await createAnexo(boletoToApi);
