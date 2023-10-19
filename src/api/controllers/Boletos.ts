@@ -1,37 +1,55 @@
 
 import { PrismaClient, Situacao, } from '@prisma/client';
 import { Request, Response } from "express";
+import { getFirstAndLastDayOfYearMonths } from '../../core';
 
 const prisma = new PrismaClient();
 
 interface FiltrosBoletos {
   perfilId: number;
-  dataInicio?: string;
-  dataFim?: string;
-  situacao?: string;
+  date?: {
+    gte?: string;
+    lte?: string;
+  }
+  situacao?: Situacao;
 }
 
 export const readBoletosByProfileId = async (req: Request, res: Response) => {
   const { perfilId } = req.params;
-  const { dataInicio, dataFim, situacao } = req.query;
+  const { month, situacao } = req.query;
   if (!perfilId) return res.status(400).json({ error: "ID inválido" });
 
   const filtros: FiltrosBoletos = {
     perfilId: +perfilId,
   };
 
-  if (dataInicio && dataFim) {
-    filtros.dataInicio = dataInicio as string;
-    filtros.dataFim = dataFim as string;
+
+  if (month) {
+    const data = new Date(month as string);
+    const datas = getFirstAndLastDayOfYearMonths(data.getMonth() + 2);
+    if (datas) {
+      const { dataInicio, dataFim } = datas;
+      const formattedDataInicio = new Date(dataInicio as string).toISOString();
+      const formattedDataFim = new Date(dataFim as string).toISOString();
+      console.log(formattedDataInicio, formattedDataFim)
+      filtros.date = {
+        gte: formattedDataInicio,
+        lte: formattedDataFim
+      }
+    }
   }
 
   if (situacao) {
-    filtros.situacao = situacao as string;
+    filtros.situacao = situacao as Situacao;
   }
 
   try {
     const boletos = await prisma.anexo.findMany({
-      where: filtros as any,
+      where: {
+        perfilId: filtros.perfilId,
+        dataVencimento: filtros.date,
+        situacao: filtros.situacao
+      },
       orderBy: {
         dataVencimento: 'asc'
       }
