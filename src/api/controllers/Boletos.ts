@@ -26,7 +26,7 @@ export const readBoletosByProfileId = async (req: Request, res: Response) => {
 
   if (month) {
     const data = new Date(month as string);
-    const datas = getFirstAndLastDayOfYearMonths(data.getMonth() + 2);
+    const datas = getFirstAndLastDayOfYearMonths(data.getMonth() + 1);
     if (datas) {
       const { dataInicio, dataFim } = datas;
       const formattedDataInicio = new Date(dataInicio as string).toISOString();
